@@ -98,6 +98,19 @@ class CPE
     @title = args[:title]
   end
 
+  # get full title (incl. version)
+  def full_title
+    return nil unless @title
+    t = @title.to_s.chomp(' ')
+    unless t[-1] =~ /[0-9]/ # title doesn't end with a digit
+      if @version # @version is set
+        t << " "
+        t << @version.to_s # attach version to title
+      end
+    end
+    t
+  end
+
   # output MITRE dictionary format
   def to_xml
     require "rexml/document"
@@ -106,10 +119,11 @@ class CPE
     item.attributes["name"] = self.to_s
     cpe23 = item.add_element "cpe-23:cpe23-item"
     cpe23.attributes["name"] = self.to_formatted
-    if @title
+    t = self.full_title
+    if t
       title = item.add_element "title"
-      title.attributes["xml:lang"] = @language.empty? ? "en-US" : @language
-      title.text = @title
+      title.attributes["xml:lang"] = @language ? @language.to_s : "en-US"
+      title.text = t
     end
     xml
   end
