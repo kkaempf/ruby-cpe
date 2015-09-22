@@ -1,3 +1,5 @@
+$:.unshift File.expand_path(File.join(File.dirname(__FILE__)))
+
 require 'helper'
 
 # CPE examples borrowed from CPE Spec document ver. 2.2:
@@ -10,13 +12,13 @@ class TestCPE < Test::Unit::TestCase
 
 	def test_parse_valid
 		cpe = CPE.parse(@valid)
-		assert_equal("/o", cpe.part)
+		assert_equal(CPE::OS, cpe.part)
 		assert_equal("microsoft", cpe.vendor)
 		assert_equal("windows_xp", cpe.product)
 		assert_equal("", cpe.version)
 		assert_equal("", cpe.update)
 		assert_equal("pro", cpe.edition)
-		assert_equal("", cpe.language)
+		assert_nil cpe.language
 	end
 
 	def test_parse_invalid
@@ -45,12 +47,11 @@ class TestCPE < Test::Unit::TestCase
 		assert_raises(ArgumentError) { CPE.parse(File.open('test/data/cpe-test-invalid')) }
 
 		assert_raises(ArgumentError) { CPE.new(:part => 2) }
-		assert_nothing_raised { CPE.new }
+		assert_raises(ArgumentError) { CPE.new }
 
-		assert_raises(KeyError) { CPE.new.generate }
 		assert_raises(KeyError) { CPE.new(part: CPE::OS).generate }
-		assert_raises(KeyError) { CPE.new(vendor: "redhat").generate }
-		assert_nothing_raised { CPE.new(vendor: "redhat", part: CPE::OS).generate }
+		assert_raises(KeyError) { CPE.new(part: CPE::OS, vendor: "redhat").generate }
+		assert_nothing_raised { CPE.new(part: CPE::OS, vendor: "redhat", product: "rhel").generate }
 	end
 
 	def test_equality

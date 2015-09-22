@@ -33,14 +33,32 @@ class CPE
   attr_accessor :edition
   # Public: Gets/sets the language String
   attr_accessor :language
+  # Public: Gets/sets the part sw_edition String
+  attr_accessor :sw_edition
+  # Public: Gets/sets the target_sw String
+  attr_accessor :target_sw
+  # Public: Gets/sets the target_hw String
+  attr_accessor :target_hw
+  # Public: Gets/sets the title String (for to_xml)
+  attr_accessor :title
 
-  # Public: String to give easier readability for "/o"
-  OS = "/o"
-  # Public: String to give easier readability for "/a"
-  Application = "/a"
-  # Public: String to give easier readability for "/h"
-  Hardware = "/h"
+  # Public: String to give easier readability for "o"
+  OS = "o"
+  # Public: String to give easier readability for "a"
+  Application = "a"
+  # Public: String to give easier readability for "h"
+  Hardware = "h"
 
+  private
+  def _wfn_attr attr
+    val = self.instance_variable_get("@#{attr}".to_sym)
+    if val
+      ",#{attr}=\"#{val}\""
+    else
+      ""
+    end
+  end
+  public
   # Public: Initialize a new CPE Object, initializing all relevent variables to
   # passed values, or else an empty string.  Part must be one of CPE::OS,
   # CPE::Application, CPE::Hardware, or else be nil.
@@ -58,21 +76,40 @@ class CPE
   #        :language - String describing the language the part targets.
   #
   # Raises ArgumentError if anything other than a Hash is passed.
-  # Raises ArgumentError if anything but '/o', '/a', or '/h' are set as the
+  # Raises ArgumentError if anything but 'o', 'a', or 'h' are set as the
   # part.
   def initialize(args={})
-    raise ArgumentError unless args.kind_of?(Hash)
-    unless /\/[oah]/.match(args[:part].to_s) || args[:part].nil?
-      raise ArgumentError
+    raise ArgumentError.new("Argument to CPE.new must be Hash") unless args.kind_of?(Hash)
+    @part = args[:part].to_s rescue nil
+    unless @part.nil? || /[oah]/.match(@part)
+      raise ArgumentError.new(":part must be 'a', 'h', or 'o'")
     end
 
-    @part = args[:part] || ""
-    @vendor = args[:vendor] || ""
-    @product = args[:product] || ""
-    @version = args[:version] || ""
-    @update = args[:update] || ""
-    @edition = args[:edition] || ""
-    @language = args[:language] || ""
+    @vendor = args[:vendor] ? args[:vendor].to_s : raise(KeyError.new ":vendor must be set")
+    @product = args[:product] ? args[:product].to_s : raise(KeyError.new ":product must be set")
+    @version = args[:version]
+    @update = args[:update]
+    @edition = args[:edition]
+    @language = args[:language]
+    @sw_edition = args[:sw_edition]
+    @target_sw = args[:target_sw]
+    @target_hw = args[:target_hw]
+    @other = args[:other]
+    @title = args[:title]
+  end
+
+  # output MITRE dictionary format
+  def to_xml
+    require "rexml/document"
+    xml = ::REXML::Document.new
+    item = xml.add_element "cpe-item"
+    item.attributes["name"] = self.to_s
+    if @title
+      title = item.add_element "title"
+      title.attributes["xml:lang"] = @language.empty? ? "en-US" : @language
+      title.text = @title
+    end
+    xml
   end
 
   # Public: Check that at least Part and one other piece of information have
@@ -82,15 +119,39 @@ class CPE
   # Raises KeyError if the part specified is invalid.
   # Raises KeyError if at least one piece of information is not set aside from
   # the part type.
-  def generate
-    raise KeyError unless /\/[oah]/.match(@part.downcase)
-    if @vendor.to_s.empty? && @product.to_s.empty? && @version.to_s.empty? &&
-       @update.to_s.empty? && @edition.to_s.empty? && @language.to_s.empty?
-      raise KeyError
-    end
+  def generate format=:uri
 
-    ["cpe", @part, @vendor, @product, @version, @update, @edition,
-      @language].join(":").downcase
+    case format
+    # cpe:/a:microsoft:internet_explorer:8.0.6001:beta
+    when :uri
+      uri = ["cpe", "/#{@part}", @vendor, @product, @version]
+      uri << @update if @update
+      uri << @edition if @edition
+      uri << @language if @language
+      uri << @sw_edition if @sw_edition
+      uri << @target_sw if @target_sw
+      uri << @target_hw if @target_hw
+      uri << @other if @other
+      uri.join(":").downcase
+    # wfn:[part="a",vendor="microsoft",product="internet_explorer", version="8\.0\.6001",update="beta"]
+    when :wfn
+      wfn = "wfn:[" +
+        "part=\"#{@part}\"" +
+        ",vendor=\"#{@vendor}\"" +
+        ",product=\"#{@product}\""
+      wfn << _wfn_attr(:version)
+      wfn << _wfn_attr(:update)
+      wfn << _wfn_attr(:edition)
+      wfn << _wfn_attr(:language)
+      wfn << _wfn_attr(:sw_edition)
+      wfn << _wfn_attr(:target_sw)
+      wfn << _wfn_attr(:target_hw)
+      wfn << _wfn_attr(:other)
+      wfn + "]"
+    # cpe:2.3:a:microsoft:internet_explorer:8.0.6001:beta:*:*:*:*:*:*
+    when :formatted
+      [ "cpe", "2.3", @part, @vendor, @product, @version, @update || "*", @edition || "*", @language || "*", @sw_edition || "*", @target_sw || "*", @target_hw || "*", @other || "*" ].join(":").downcase
+    end
   end
 
   # Public: Test for equality of two CPE strings.
@@ -126,9 +187,30 @@ class CPE
     data = Hash.new
     discard, data[:part], data[:vendor], data[:product], data[:version],
     data[:update], data[:edition], data[:language] = cpe.split(/:/, 8)
-
+    data[:part] = data[:part][1..-1]
     return self.new data
   end
 
-  alias :to_s :generate
+  # this actually returns the 'uri' representation
+  def to_s
+    to_uri
+  end
+  # URI binding representation
+  # cpe:/a:microsoft:internet_explorer:8.0.6001:beta
+  #
+  def to_uri
+    generate :uri
+  end
+  # Well formed name
+  # wfn:[part="a",vendor="microsoft",product="internet_explorer", version="8\.0\.6001",update="beta"]
+  #
+  def to_wfn
+    generate :wfn
+  end
+  # Formatted string binding
+  # cpe:2.3:a:microsoft:internet_explorer:8.0.6001:beta:*:*:*:*:*:*
+  #
+  def to_formatted
+    generate :formatted
+  end
 end
