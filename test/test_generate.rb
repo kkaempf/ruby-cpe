@@ -23,4 +23,9 @@ class TestGenerate < Test::Unit::TestCase
     formatted = @cpe.to_formatted
     assert_equal('cpe:2.3:a:microsoft:internet_explorer:8.0.6001:beta:*:*:*:*:*:*', formatted)
   end
+
+  def test_xml
+    xml = @cpe.to_xml
+    xml.write($stdout, 2)
+  end
 end

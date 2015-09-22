@@ -104,6 +104,8 @@ class CPE
     xml = ::REXML::Document.new
     item = xml.add_element "cpe-item"
     item.attributes["name"] = self.to_s
+    cpe23 = item.add_element "cpe-23:cpe23-item"
+    cpe23.attributes["name"] = self.to_formatted
     if @title
       title = item.add_element "title"
       title.attributes["xml:lang"] = @language.empty? ? "en-US" : @language
