@@ -111,7 +111,12 @@ class CPE
     t
   end
 
-  # output MITRE dictionary format
+  # add references for NIST dictionary
+  # hash: { href => description, ... }
+  def references= hash
+    @references = hash
+  end
+  # output MITRE/NIST dictionary format
   def to_xml
     require "rexml/document"
     xml = ::REXML::Document.new
@@ -124,6 +129,14 @@ class CPE
       title = item.add_element "title"
       title.attributes["xml:lang"] = @language ? @language.to_s : "en-US"
       title.text = t
+    end
+    if @references
+      references = item.add_element "references"
+      @references.each do |href, description|
+        ref = references.add_element "reference"
+        ref.attributes["href"] = href
+        ref.text = description
+      end
     end
     xml
   end
